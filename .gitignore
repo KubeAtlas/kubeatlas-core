@@ -1,0 +1,24 @@
+# Rust target
+/target
+
+# Cargo backups
+**/*.rs.bk
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Env files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Docker
+**/.dockerignore
+
+# Logs
+*.log

@@ -1,0 +1,89 @@
+{
+  "realm": "kubeatlas",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "kubeatlas-backend",
+      "name": "KubeAtlas Backend",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "fullScopeAllowed": true,
+      "secret": "backend-secret-key",
+      "defaultClientScopes": ["roles", "profile", "email"],
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "client roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "admin" },
+      { "name": "user" },
+      { "name": "guest" }
+    ]
+  }
+  ,
+  "users": [
+    {
+      "username": "admin-service",
+      "enabled": true,
+      "email": "admin-service@local",
+      "firstName": "Admin",
+      "lastName": "Service",
+      "credentials": [
+        { "type": "password", "value": "AdminPassw0rd!", "temporary": false }
+      ],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "service-account-kubeatlas-backend",
+      "enabled": true,
+      "serviceAccountClientId": "kubeatlas-backend",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "view-users",
+          "query-users",
+          "view-realm",
+          "manage-realm",
+          "view-clients",
+          "manage-clients"
+        ]
+      }
+    }
+  ]
+}
+
+
