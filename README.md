@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://media.giphy.com/media/cRKbn34ghYo9SHS2WF/giphy.gif" alt="KubeAtlas" width="640" />
+</p>
+
 # KubeAtlas Backend
 
 [![Rust](https://img.shields.io/badge/Rust-1.85+-93450a?logo=rust)](https://www.rust-lang.org/)
