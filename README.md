@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://i.giphy.com/78xv3fAEcIKNdx7vSv.gif" alt="KubeAtlas" width="640" />
+  <img src="assets/kubeatlas-logo.gif" alt="KubeAtlas" width="640" />
 </p>
 
 # KubeAtlas Backend
