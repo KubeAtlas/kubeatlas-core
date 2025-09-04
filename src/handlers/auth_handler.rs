@@ -6,7 +6,7 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{info, warn};
 
-use crate::{auth::{TokenValidationRequest, TokenValidationResponse, UserInfoResponse, KeycloakUser}, AppState};
+use crate::{auth::{TokenValidationRequest, TokenValidationResponse, UserInfoResponse, KeycloakUser, RefreshTokenRequest, RefreshTokenResponse, LogoutRequest}, AppState};
 
 pub async fn validate_token(
     State(state): State<AppState>,
@@ -61,15 +61,48 @@ pub async fn get_user_info(
 }
 
 pub async fn refresh_token(
-    State(_state): State<AppState>,
-    Json(_payload): Json<Value>,
-) -> Result<Json<Value>, StatusCode> {
-    // TODO: Implement token refresh logic
-    // For now, return a placeholder response
-    let response = json!({
-        "message": "Token refresh not implemented yet",
-        "status": "placeholder"
-    });
+    State(state): State<AppState>,
+    Json(payload): Json<RefreshTokenRequest>,
+) -> Result<Json<RefreshTokenResponse>, (StatusCode, Json<Value>)> {
+    info!("Refreshing token...");
     
-    Ok(Json(response))
+    match state.auth_service.refresh_token(&payload.refresh_token).await {
+        Ok(response) => {
+            info!("Token refresh successful");
+            Ok(Json(response))
+        }
+        Err(e) => {
+            warn!("Token refresh error: {}", e);
+            let error_response = json!({
+                "error": "invalid_token",
+                "error_description": "Refresh token is invalid or expired"
+            });
+            Err((StatusCode::UNAUTHORIZED, Json(error_response)))
+        }
+    }
+}
+
+pub async fn logout(
+    State(state): State<AppState>,
+    Json(payload): Json<LogoutRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    info!("Logging out user...");
+    
+    match state.auth_service.logout(&payload.refresh_token).await {
+        Ok(()) => {
+            info!("Logout successful");
+            let response = json!({
+                "message": "Successfully logged out"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            warn!("Logout error: {}", e);
+            let error_response = json!({
+                "error": "logout_failed",
+                "error_description": "Failed to logout"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
 }

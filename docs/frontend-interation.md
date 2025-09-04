@@ -49,6 +49,8 @@ const data = await res.json();
 
 ## 3) Пример вызовов
 
+### Пользовательские эндпоинты (требуют аутентификации)
+
 - Роли пользователя:
 ```
 GET http://localhost:3001/api/v1/user/roles
@@ -57,10 +59,34 @@ GET http://localhost:3001/api/v1/user/roles
 ```
 GET http://localhost:3001/api/v1/user/profile
 ```
-- Создание пользователя (только admin):
+
+### Административные эндпоинты (требуют роль admin)
+
+- Создание пользователя:
 ```
 POST http://localhost:3001/api/v1/admin/users
 Body: { username, email, first_name, last_name, password, roles: ["user"] }
+```
+
+- Обновление пользователя:
+```
+PUT http://localhost:3001/api/v1/admin/users/{user_id}
+Body: { first_name?, last_name?, email?, roles? }
+```
+
+- Удаление пользователя:
+```
+DELETE http://localhost:3001/api/v1/admin/users/{user_id}
+```
+
+- Получение активных сессий пользователя:
+```
+GET http://localhost:3001/api/v1/admin/users/{user_id}/sessions
+```
+
+- Отзыв всех сессий пользователя:
+```
+POST http://localhost:3001/api/v1/admin/users/{user_id}/sessions/revoke
 ```
 
 ## 4) Обновление токена

@@ -56,6 +56,23 @@ pub struct TokenValidationRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefreshTokenRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefreshTokenResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogoutRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenValidationResponse {
     pub valid: bool,
     pub user: Option<KeycloakUser>,
@@ -363,6 +380,101 @@ impl AuthService {
     pub fn is_guest(&self, user: &KeycloakUser) -> bool {
         self.has_role(user, "guest")
     }
+
+    pub async fn refresh_token(&self, refresh_token: &str) -> Result<RefreshTokenResponse> {
+        let params = [
+            ("grant_type", "refresh_token"),
+            ("client_id", self.config.keycloak_client_id.as_str()),
+            ("client_secret", self.config.keycloak_client_secret.as_str()),
+            ("refresh_token", refresh_token),
+        ];
+
+        let resp = self
+            .client
+            .post(&self.config.keycloak_token_url())
+            .form(&params)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to refresh token: HTTP {}", resp.status()));
+        }
+
+        let token_resp: OAuthTokenResponse = resp.json().await?;
+        Ok(RefreshTokenResponse {
+            access_token: token_resp.access_token,
+            refresh_token: token_resp.refresh_token.unwrap_or_default(),
+            expires_in: token_resp.expires_in,
+        })
+    }
+
+    pub async fn logout(&self, refresh_token: &str) -> Result<()> {
+        let params = [
+            ("client_id", self.config.keycloak_client_id.as_str()),
+            ("client_secret", self.config.keycloak_client_secret.as_str()),
+            ("refresh_token", refresh_token),
+        ];
+
+        let logout_url = self.config.keycloak_logout_url();
+
+        let resp = self
+            .client
+            .post(&logout_url)
+            .form(&params)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to logout: HTTP {}", resp.status()));
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_active_sessions(&self, user_id: &str) -> Result<Vec<serde_json::Value>> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        let sessions_url = format!(
+            "{}/admin/realms/{}/users/{}/sessions",
+            self.config.keycloak_url, self.config.keycloak_realm, user_id
+        );
+
+        let resp = self
+            .client
+            .get(&sessions_url)
+            .bearer_auth(&admin_token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to get sessions: HTTP {}", resp.status()));
+        }
+
+        let sessions: Vec<serde_json::Value> = resp.json().await?;
+        Ok(sessions)
+    }
+
+    pub async fn revoke_user_sessions(&self, user_id: &str) -> Result<()> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        let logout_url = format!(
+            "{}/admin/realms/{}/users/{}/logout",
+            self.config.keycloak_url, self.config.keycloak_realm, user_id
+        );
+
+        let resp = self
+            .client
+            .post(&logout_url)
+            .bearer_auth(&admin_token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to revoke sessions: HTTP {}", resp.status()));
+        }
+
+        Ok(())
+    }
 }
 
 // --------------------------
@@ -374,6 +486,9 @@ struct OAuthTokenResponse {
     access_token: String,
     token_type: String,
     expires_in: i64,
+    refresh_token: Option<String>,
+    #[serde(alias = "refresh_expires_in")]
+    refresh_expires_in: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -637,6 +752,31 @@ impl AuthService {
 
         // Assign provided roles
         self.assign_realm_roles(admin_token, user_id, roles).await
+    }
+
+    pub async fn delete_keycloak_user(&self, user_id: &str) -> Result<()> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        let user_url = format!(
+            "{}/admin/realms/{}/users/{}",
+            self.config.keycloak_url, self.config.keycloak_realm, user_id
+        );
+
+        let resp = self
+            .client
+            .delete(&user_url)
+            .bearer_auth(&admin_token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!(
+                "Failed to delete user: HTTP {}",
+                resp.status()
+            ));
+        }
+
+        Ok(())
     }
 
     async fn get_realm_role_representation(

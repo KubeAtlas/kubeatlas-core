@@ -41,4 +41,49 @@ pub async fn update_user(
     }
 }
 
+pub async fn get_user_sessions(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Admin: get sessions for user '{}'", user_id);
+    match state.auth_service.get_active_sessions(&user_id).await {
+        Ok(sessions) => Ok(Json(json!({ "sessions": sessions }))),
+        Err(e) => {
+            warn!("Get user sessions failed: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+pub async fn revoke_user_sessions(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Admin: revoke sessions for user '{}'", user_id);
+    match state.auth_service.revoke_user_sessions(&user_id).await {
+        Ok(()) => Ok(Json(json!({ "message": "All sessions revoked" }))),
+        Err(e) => {
+            warn!("Revoke user sessions failed: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+pub async fn delete_user(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Admin: delete user '{}'", user_id);
+    match state.auth_service.delete_keycloak_user(&user_id).await {
+        Ok(()) => Ok(Json(json!({ 
+            "message": "User deleted successfully",
+            "id": user_id 
+        }))),
+        Err(e) => {
+            warn!("Delete user failed: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
 

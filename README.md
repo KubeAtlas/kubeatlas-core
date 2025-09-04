@@ -37,12 +37,37 @@ TOKEN=$(curl -s -X POST 'http://localhost:8081/realms/kubeatlas/protocol/openid-
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/user/roles | jq .
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/user/profile | jq .
 ```
+5. Обновление токена (refresh):
+```
+REFRESH_TOKEN="your_refresh_token_here"
+curl -s -X POST http://localhost:3001/auth/refresh \
+  -H 'Content-Type: application/json' \
+  -d '{"refresh_token":"'$REFRESH_TOKEN'"}' | jq .
+```
+6. Выход из системы:
+```
+curl -s -X POST http://localhost:3001/auth/logout \
+  -H 'Content-Type: application/json' \
+  -d '{"refresh_token":"'$REFRESH_TOKEN'"}' | jq .
+```
 5. Создание пользователя (admin):
 ```
 TS=$(date +%s)
 curl -s -X POST http://localhost:3001/api/v1/admin/users \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"username":"user_'"$TS"'","email":"user_'"$TS"'@example.com","first_name":"U","last_name":"T","password":"StrongPassw0rd!","roles":["user"]}' | jq .
+```
+8. Управление сессиями и пользователями (admin):
+```
+# Получить активные сессии пользователя
+USER_ID="user-uuid-here"
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/admin/users/$USER_ID/sessions | jq .
+
+# Отозвать все сессии пользователя
+curl -s -X POST -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/admin/users/$USER_ID/sessions/revoke | jq .
+
+# Удалить пользователя (ОСТОРОЖНО: необратимое действие!)
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/admin/users/$USER_ID | jq .
 ```
 
 ## ⚙️ Переменные окружения
@@ -59,6 +84,8 @@ curl -s -X POST http://localhost:3001/api/v1/admin/users \
 - Локальная проверка JWT через JWKS; фоллбэк на userinfo
 - Ожидание готовности Keycloak при старте
 - RBAC: `require_admin_middleware` для админских маршрутов
+- Полное управление сессиями и refresh token
+- Отзыв сессий через admin API
 
 ## 🗺️ Архитектура (Mermaid)
 
@@ -98,7 +125,8 @@ sequenceDiagram
 ```
 
 ## 📚 Документация
-- Интеграция фронтенда: `docs/frontend.md`
+- Интеграция фронтенда: `docs/frontend-interation.md`
+- Управление пользователями (фронтенд): `docs/user-management-frontend.md`
 - Настройка Keycloak: `docs/keycloak.md`
 - API эндпоинты: `docs/api.md`
 

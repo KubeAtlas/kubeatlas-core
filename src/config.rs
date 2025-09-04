@@ -73,4 +73,8 @@ impl Config {
     pub fn keycloak_jwks_url(&self) -> String {
         format!("{}/realms/{}/protocol/openid-connect/certs", self.keycloak_url, self.keycloak_realm)
     }
+
+    pub fn keycloak_logout_url(&self) -> String {
+        format!("{}/realms/{}/protocol/openid-connect/logout", self.keycloak_url, self.keycloak_realm)
+    }
 }

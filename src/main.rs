@@ -1,6 +1,6 @@
 use axum::{
     middleware::from_fn_with_state,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 use tower::ServiceBuilder;
@@ -94,6 +94,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let admin = Router::new()
         .route("/api/v1/admin/users", post(user_admin_handler::create_user))
         .route("/api/v1/admin/users/:id", put(user_admin_handler::update_user))
+        .route("/api/v1/admin/users/:id", delete(user_admin_handler::delete_user))
+        .route("/api/v1/admin/users/:id/sessions", get(user_admin_handler::get_user_sessions))
+        .route("/api/v1/admin/users/:id/sessions/revoke", post(user_admin_handler::revoke_user_sessions))
         // Порядок важен: внешний слой выполняется первым, поэтому сначала auth, потом require_admin
         .route_layer(from_fn_with_state(app_state.clone(), require_admin_middleware))
         .route_layer(from_fn_with_state(app_state.clone(), auth_middleware));
@@ -107,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/validate", post(auth_handler::validate_token))
         .route("/auth/user", get(auth_handler::get_user_info))
         .route("/auth/refresh", post(auth_handler::refresh_token))
+        .route("/auth/logout", post(auth_handler::logout))
         
         // Merge subrouters
         .merge(protected)
