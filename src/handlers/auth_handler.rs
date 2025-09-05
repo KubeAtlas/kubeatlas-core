@@ -6,7 +6,7 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{info, warn};
 
-use crate::{auth::{TokenValidationRequest, TokenValidationResponse, UserInfoResponse, KeycloakUser, RefreshTokenRequest, RefreshTokenResponse, LogoutRequest}, AppState};
+use crate::{auth::{TokenValidationRequest, TokenValidationResponse, UserInfoResponse, RefreshTokenRequest, RefreshTokenResponse, LogoutRequest}, AppState};
 
 pub async fn validate_token(
     State(state): State<AppState>,

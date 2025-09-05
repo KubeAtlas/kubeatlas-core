@@ -41,3 +41,20 @@ base64 = "0.22"
 rand = "0.8"
 
 # HTTP client for Keycloak (already defined above)
+
+[dev-dependencies]
+# Testing dependencies
+tokio-test = "0.4"
+axum-test = "15.0"
+mockall = "0.12"
+rstest = "0.21"
+tempfile = "3.8"
+httpmock = "0.7"
+
+[features]
+default = []
+integration_tests = []
+
+[[bin]]
+name = "kubeatlas-backend"
+path = "src/main.rs"

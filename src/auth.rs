@@ -803,4 +803,95 @@ impl AuthService {
             s => Err(anyhow!("Failed to get role '{}': HTTP {}", role_name, s)),
         }
     }
+
+    /// Get total number of users in the realm
+    pub async fn get_total_users_count(&self) -> Result<u64> {
+        let admin_token = self.get_admin_access_token().await?;
+        let url = format!(
+            "{}/admin/realms/{}/users/count",
+            self.config.keycloak_url, self.config.keycloak_realm
+        );
+
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&admin_token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to get users count: HTTP {}", resp.status()));
+        }
+
+        let count: u64 = resp.json().await?;
+        Ok(count)
+    }
+
+    /// Get number of active sessions (approximation based on recent user activity)
+    pub async fn get_active_sessions_count(&self) -> Result<u64> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        // Get all users first
+        let users_url = format!(
+            "{}/admin/realms/{}/users",
+            self.config.keycloak_url, self.config.keycloak_realm
+        );
+
+        let resp = self
+            .client
+            .get(&users_url)
+            .bearer_auth(&admin_token)
+            .query(&[("max", "1000")]) // Limit to reasonable number
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to get users: HTTP {}", resp.status()));
+        }
+
+        let users: Vec<serde_json::Value> = resp.json().await?;
+        let mut active_sessions = 0u64;
+
+        // For each user, check if they have active sessions
+        for user in users.iter().take(100) { // Limit to avoid too many requests
+            if let Some(user_id) = user.get("id").and_then(|v| v.as_str()) {
+                let sessions_url = format!(
+                    "{}/admin/realms/{}/users/{}/sessions",
+                    self.config.keycloak_url, self.config.keycloak_realm, user_id
+                );
+
+                if let Ok(sessions_resp) = self
+                    .client
+                    .get(&sessions_url)
+                    .bearer_auth(&admin_token)
+                    .send()
+                    .await
+                {
+                    if sessions_resp.status().is_success() {
+                        if let Ok(sessions) = sessions_resp.json::<Vec<serde_json::Value>>().await {
+                            active_sessions += sessions.len() as u64;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(active_sessions)
+    }
+
+    /// Health check for Keycloak connectivity
+    pub async fn health_check(&self) -> Result<()> {
+        let config_url = format!(
+            "{}/realms/{}/.well-known/openid-configuration",
+            self.config.keycloak_url, self.config.keycloak_realm
+        );
+
+        let resp = self.client.get(&config_url).send().await?;
+        
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(anyhow!("Keycloak health check failed: HTTP {}", resp.status()))
+        }
+    }
 }

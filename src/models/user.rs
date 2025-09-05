@@ -43,3 +43,12 @@ pub struct UserProfile {
     pub is_user: bool,
     pub is_guest: bool,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserRole {
+    pub username: String,
+    pub roles: Vec<String>,
+    pub is_admin: bool,
+    pub is_user: bool,
+    pub is_guest: bool,
+}

@@ -6,5 +6,4 @@ pub mod cluster;
 pub mod response;
 
 pub use user::*;
-pub use cluster::*;
 pub use response::*;

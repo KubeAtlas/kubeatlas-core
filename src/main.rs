@@ -19,7 +19,7 @@ mod models;
 
 use auth::AuthService;
 use config::Config;
-use handlers::{auth_handler, health_handler, user_handler, user_admin_handler};
+use handlers::{auth_handler, health_handler, user_handler, user_admin_handler, statistics_handler};
 use crate::middleware::{auth_middleware, require_admin_middleware};
 
 #[derive(Clone)]
@@ -88,6 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protected = Router::new()
         .route("/api/v1/user/profile", get(user_handler::get_profile))
         .route("/api/v1/user/roles", get(user_handler::get_user_roles))
+        .route("/api/v1/statistics", get(statistics_handler::get_statistics))
         .layer(from_fn_with_state(app_state.clone(), auth_middleware));
 
     // Admin routes (RBAC only for this subrouter)
