@@ -614,6 +614,98 @@ impl AuthService {
 
         Ok(())
     }
+
+    pub async fn revoke_specific_session(&self, session_id: &str) -> Result<()> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        let session_url = format!(
+            "{}/admin/realms/{}/sessions/{}",
+            self.config.keycloak_url, self.config.keycloak_realm, session_id
+        );
+
+        let resp = self
+            .client
+            .delete(&session_url)
+            .bearer_auth(&admin_token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to revoke specific session: HTTP {}", resp.status()));
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_all_users(&self) -> Result<Vec<serde_json::Value>> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        let users_url = format!(
+            "{}/admin/realms/{}/users",
+            self.config.keycloak_url, self.config.keycloak_realm
+        );
+
+        let resp = self
+            .client
+            .get(&users_url)
+            .bearer_auth(&admin_token)
+            .query(&[("max", "100")]) // Limit to 100 users
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to get users: HTTP {}", resp.status()));
+        }
+
+        let users: Vec<serde_json::Value> = resp.json().await?;
+        Ok(users)
+    }
+
+    pub async fn get_user_by_id(&self, user_id: &str) -> Result<serde_json::Value> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        let user_url = format!(
+            "{}/admin/realms/{}/users/{}",
+            self.config.keycloak_url, self.config.keycloak_realm, user_id
+        );
+
+        let resp = self
+            .client
+            .get(&user_url)
+            .bearer_auth(&admin_token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to get user: HTTP {}", resp.status()));
+        }
+
+        let user: serde_json::Value = resp.json().await?;
+        Ok(user)
+    }
+
+    pub async fn get_user_roles_by_id(&self, user_id: &str) -> Result<Vec<serde_json::Value>> {
+        let admin_token = self.get_admin_access_token().await?;
+        
+        let roles_url = format!(
+            "{}/admin/realms/{}/users/{}/role-mappings/realm",
+            self.config.keycloak_url, self.config.keycloak_realm, user_id
+        );
+
+        let resp = self
+            .client
+            .get(&roles_url)
+            .bearer_auth(&admin_token)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to get user roles: HTTP {}", resp.status()));
+        }
+
+        let roles: Vec<serde_json::Value> = resp.json().await?;
+        Ok(roles)
+    }
 }
 
 // --------------------------

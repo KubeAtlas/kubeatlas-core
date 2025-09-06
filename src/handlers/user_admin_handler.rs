@@ -69,6 +69,61 @@ pub async fn revoke_user_sessions(
     }
 }
 
+pub async fn revoke_specific_user_session(
+    State(state): State<AppState>,
+    Path((user_id, session_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Admin: revoke specific session '{}' for user '{}'", session_id, user_id);
+    match state.auth_service.revoke_specific_session(&session_id).await {
+        Ok(()) => Ok(Json(json!({ "message": format!("Session {} revoked", session_id) }))),
+        Err(e) => {
+            warn!("Revoke specific session failed: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+pub async fn get_all_users(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Admin: get all users");
+    match state.auth_service.get_all_users().await {
+        Ok(users) => Ok(Json(json!({ "users": users }))),
+        Err(e) => {
+            warn!("Get all users failed: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+pub async fn get_user_by_id(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Admin: get user by id '{}'", user_id);
+    match state.auth_service.get_user_by_id(&user_id).await {
+        Ok(user) => Ok(Json(user)),
+        Err(e) => {
+            warn!("Get user by id failed: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+pub async fn get_user_roles(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Admin: get roles for user '{}'", user_id);
+    match state.auth_service.get_user_roles_by_id(&user_id).await {
+        Ok(roles) => Ok(Json(json!({ "roles": roles }))),
+        Err(e) => {
+            warn!("Get user roles failed: {}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
 pub async fn delete_user(
     State(state): State<AppState>,
     Path(user_id): Path<String>,

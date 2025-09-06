@@ -101,11 +101,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Admin routes (RBAC only for this subrouter)
     let admin = Router::new()
+        .route("/api/v1/admin/users", get(user_admin_handler::get_all_users))
         .route("/api/v1/admin/users", post(user_admin_handler::create_user))
+        .route("/api/v1/admin/users/:id", get(user_admin_handler::get_user_by_id))
         .route("/api/v1/admin/users/:id", put(user_admin_handler::update_user))
         .route("/api/v1/admin/users/:id", delete(user_admin_handler::delete_user))
+        .route("/api/v1/admin/users/:id/roles", get(user_admin_handler::get_user_roles))
         .route("/api/v1/admin/users/:id/sessions", get(user_admin_handler::get_user_sessions))
         .route("/api/v1/admin/users/:id/sessions/revoke", post(user_admin_handler::revoke_user_sessions))
+        .route("/api/v1/admin/users/:id/sessions/:session_id", delete(user_admin_handler::revoke_specific_user_session))
         // Порядок важен: внешний слой выполняется первым, поэтому сначала auth, потом require_admin
         .route_layer(from_fn_with_state(app_state.clone(), require_admin_middleware))
         .route_layer(from_fn_with_state(app_state.clone(), auth_middleware));
