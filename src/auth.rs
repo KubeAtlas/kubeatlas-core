@@ -100,6 +100,145 @@ impl AuthService {
         })
     }
 
+    pub async fn ensure_realm_exists(&self) -> Result<()> {
+        let master_token = self.get_master_admin_token().await?;
+        
+        // Check if realm exists
+        let realm_url = format!("{}/admin/realms/{}", self.config.keycloak_url, self.config.keycloak_realm);
+        let resp = self.client.get(&realm_url).bearer_auth(&master_token).send().await?;
+        
+        if resp.status().is_success() {
+            tracing::info!("Realm '{}' already exists", self.config.keycloak_realm);
+            return Ok(());
+        }
+        
+        if resp.status() != reqwest::StatusCode::NOT_FOUND {
+            return Err(anyhow!("Failed to check realm existence: HTTP {}", resp.status()));
+        }
+        
+        // Realm doesn't exist, create it
+        tracing::info!("Creating realm '{}'", self.config.keycloak_realm);
+        self.create_realm_with_token(&master_token).await?;
+        
+        Ok(())
+    }
+
+    async fn get_master_admin_token(&self) -> Result<String> {
+        let (admin_user, admin_password) = match (&self.config.keycloak_admin_user, &self.config.keycloak_admin_password) {
+            (Some(u), Some(p)) => (u.clone(), p.clone()),
+            _ => return Err(anyhow!("Master admin credentials not configured")),
+        };
+
+        let params = [
+            ("grant_type", "password"),
+            ("client_id", "admin-cli"),
+            ("username", admin_user.as_str()),
+            ("password", admin_password.as_str()),
+        ];
+        
+        let master_token_url = format!("{}/realms/master/protocol/openid-connect/token", self.config.keycloak_url);
+        let resp = self.client.post(&master_token_url).form(&params).send().await?;
+        
+        if !resp.status().is_success() {
+            return Err(anyhow!("Failed to get master admin token: HTTP {}", resp.status()));
+        }
+        
+        let token: OAuthTokenResponse = resp.json().await?;
+        Ok(token.access_token)
+    }
+
+    async fn create_realm_with_token(&self, master_token: &str) -> Result<()> {
+        let admin_username = self.config.adm_user.as_deref().unwrap_or("admin-service");
+        let admin_password = self.config.adm_password.as_deref().unwrap_or("AdminPassw0rd!");
+        let service_account_username = format!("service-account-{}", self.config.keycloak_client_id);
+        
+        // Create basic realm configuration
+        let mut realm_config = serde_json::Map::new();
+        realm_config.insert("realm".to_string(), serde_json::Value::String(self.config.keycloak_realm.clone()));
+        realm_config.insert("enabled".to_string(), serde_json::Value::Bool(true));
+        realm_config.insert("sslRequired".to_string(), serde_json::Value::String("none".to_string()));
+        realm_config.insert("registrationAllowed".to_string(), serde_json::Value::Bool(false));
+        realm_config.insert("loginWithEmailAllowed".to_string(), serde_json::Value::Bool(true));
+        realm_config.insert("duplicateEmailsAllowed".to_string(), serde_json::Value::Bool(false));
+        realm_config.insert("resetPasswordAllowed".to_string(), serde_json::Value::Bool(true));
+        realm_config.insert("editUsernameAllowed".to_string(), serde_json::Value::Bool(false));
+        realm_config.insert("bruteForceProtected".to_string(), serde_json::Value::Bool(true));
+        realm_config.insert("accessTokenLifespan".to_string(), serde_json::Value::Number(serde_json::Number::from(3600)));
+        realm_config.insert("ssoSessionIdleTimeout".to_string(), serde_json::Value::Number(serde_json::Number::from(1800)));
+        realm_config.insert("ssoSessionMaxLifespan".to_string(), serde_json::Value::Number(serde_json::Number::from(36000)));
+        
+        // Create client configuration
+        let mut client = serde_json::Map::new();
+        client.insert("clientId".to_string(), serde_json::Value::String(self.config.keycloak_client_id.clone()));
+        client.insert("name".to_string(), serde_json::Value::String("KubeAtlas Backend".to_string()));
+        client.insert("enabled".to_string(), serde_json::Value::Bool(true));
+        client.insert("publicClient".to_string(), serde_json::Value::Bool(false));
+        client.insert("serviceAccountsEnabled".to_string(), serde_json::Value::Bool(true));
+        client.insert("directAccessGrantsEnabled".to_string(), serde_json::Value::Bool(true));
+        client.insert("standardFlowEnabled".to_string(), serde_json::Value::Bool(true));
+        client.insert("fullScopeAllowed".to_string(), serde_json::Value::Bool(true));
+        client.insert("secret".to_string(), serde_json::Value::String(self.config.keycloak_client_secret.clone()));
+        
+        let default_scopes = vec!["roles", "profile", "email"];
+        client.insert("defaultClientScopes".to_string(), serde_json::Value::Array(
+            default_scopes.into_iter().map(|s| serde_json::Value::String(s.to_string())).collect()
+        ));
+        client.insert("redirectUris".to_string(), serde_json::Value::Array(vec![serde_json::Value::String("*".to_string())]));
+        client.insert("webOrigins".to_string(), serde_json::Value::Array(vec![serde_json::Value::String("*".to_string())]));
+        
+        realm_config.insert("clients".to_string(), serde_json::Value::Array(vec![serde_json::Value::Object(client)]));
+        
+        // Create roles
+        let mut roles = serde_json::Map::new();
+        let realm_roles = vec![
+            serde_json::json!({"name": "admin"}),
+            serde_json::json!({"name": "user"}),
+            serde_json::json!({"name": "guest"})
+        ];
+        roles.insert("realm".to_string(), serde_json::Value::Array(realm_roles));
+        realm_config.insert("roles".to_string(), serde_json::Value::Object(roles));
+        
+        // Create users - only service account, admin user will be created separately
+        let service_account = serde_json::json!({
+            "username": service_account_username,
+            "enabled": true,
+            "serviceAccountClientId": self.config.keycloak_client_id,
+            "clientRoles": {
+                "realm-management": [
+                    "manage-users",
+                    "view-users",
+                    "query-users",
+                    "view-realm",
+                    "manage-realm",
+                    "view-clients",
+                    "manage-clients"
+                ]
+            }
+        });
+        
+        realm_config.insert("users".to_string(), serde_json::Value::Array(vec![service_account]));
+
+        let realms_url = format!("{}/admin/realms", self.config.keycloak_url);
+        let resp = self.client.post(&realms_url)
+            .bearer_auth(master_token)
+            .json(&serde_json::Value::Object(realm_config))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Failed to create realm: HTTP {} - {}", status, text));
+        }
+
+        tracing::info!("Realm '{}' created successfully", self.config.keycloak_realm);
+        
+        // Wait a bit for realm to be fully ready
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        
+        Ok(())
+    }
+
     pub async fn ensure_admin_user(&self) -> Result<()> {
         let username = match (&self.config.adm_user, &self.config.adm_password) {
             (Some(u), Some(_)) => u.clone(),

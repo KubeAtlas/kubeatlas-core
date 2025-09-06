@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 // KubeAtlas Backend Library
 // Экспортируем публичные модули для использования в тестах
 

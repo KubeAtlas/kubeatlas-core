@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use axum::{
     middleware::from_fn_with_state,
     routing::{delete, get, post, put},
@@ -67,6 +69,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Wait for Keycloak readiness
     if let Err(e) = auth_service.wait_for_keycloak_ready(120).await {
         eprintln!("⚠️ Keycloak not ready: {}", e);
+    }
+
+    // Ensure realm exists before proceeding
+    if let Err(e) = auth_service.ensure_realm_exists().await {
+        eprintln!("⚠️ Failed to ensure realm exists: {}", e);
+        // Continue anyway in case realm already exists
     }
 
     // Ensure admin user if configured

@@ -47,7 +47,9 @@ pub async fn auth_middleware(
             }
 
             if let Some(user) = validation_response.user {
-                info!("User authenticated: {}", user.preferred_username);
+                info!("User authenticated: {} (sub: {})", user.preferred_username, user.sub);
+                info!("User realm_access: {:?}", user.realm_access);
+                info!("User resource_access: {:?}", user.resource_access);
                 
                 // Add user info to request extensions for use in handlers
                 request.extensions_mut().insert(user);
@@ -93,8 +95,17 @@ pub async fn require_admin_middleware(
         )
     })?;
 
-    if !state.auth_service.is_admin(user) {
-        warn!("Access denied: user is not admin");
+    // Debug: log user info and roles
+    let all_roles = state.auth_service.get_user_roles(user);
+    info!("Admin check for user '{}': roles={:?}", user.preferred_username, all_roles);
+    info!("Realm access: {:?}", user.realm_access);
+    info!("Resource access: {:?}", user.resource_access);
+    
+    let is_admin = state.auth_service.is_admin(user);
+    info!("Is admin check result: {}", is_admin);
+
+    if !is_admin {
+        warn!("Access denied: user '{}' is not admin. Available roles: {:?}", user.preferred_username, all_roles);
         return Err((
             StatusCode::FORBIDDEN,
             Json(json!({
@@ -104,5 +115,6 @@ pub async fn require_admin_middleware(
         ));
     }
 
+    info!("Admin access granted for user: {}", user.preferred_username);
     Ok(next.run(request).await)
 }
