@@ -181,31 +181,289 @@ setInterval(getStatistics, 30000);
 
 ### Административные эндпоинты (требуют роль admin)
 
-- Создание пользователя:
+#### Управление пользователями
+
+- **Получение всех пользователей:**
+```
+GET http://localhost:3001/api/v1/admin/users
+```
+Возвращает список всех пользователей в системе.
+
+- **Получение пользователя по ID:**
+```
+GET http://localhost:3001/api/v1/admin/users/{user_id}
+```
+Возвращает информацию о конкретном пользователе.
+
+- **Получение ролей пользователя:**
+```
+GET http://localhost:3001/api/v1/admin/users/{user_id}/roles
+```
+Возвращает список ролей пользователя.
+
+- **Создание пользователя:**
 ```
 POST http://localhost:3001/api/v1/admin/users
 Body: { username, email, first_name, last_name, password, roles: ["user"] }
 ```
 
-- Обновление пользователя:
+- **Обновление пользователя:**
 ```
 PUT http://localhost:3001/api/v1/admin/users/{user_id}
 Body: { first_name?, last_name?, email?, roles? }
 ```
 
-- Удаление пользователя:
+- **Удаление пользователя:**
 ```
 DELETE http://localhost:3001/api/v1/admin/users/{user_id}
 ```
 
-- Получение активных сессий пользователя:
+#### Управление сессиями
+
+- **Получение активных сессий пользователя:**
 ```
 GET http://localhost:3001/api/v1/admin/users/{user_id}/sessions
 ```
+Возвращает список всех активных сессий пользователя.
 
-- Отзыв всех сессий пользователя:
+- **Отзыв всех сессий пользователя:**
 ```
 POST http://localhost:3001/api/v1/admin/users/{user_id}/sessions/revoke
+```
+Закрывает все активные сессии пользователя.
+
+- **Закрытие отдельной сессии (НОВОЕ):**
+```
+DELETE http://localhost:3001/api/v1/admin/users/{user_id}/sessions/{session_id}
+```
+Закрывает конкретную сессию пользователя по ID сессии.
+
+#### Примеры использования новых эндпоинтов
+
+**Получение списка пользователей для админ-панели:**
+```js
+const getAllUsers = async () => {
+  try {
+    await keycloak.updateToken(30);
+    const response = await fetch('http://localhost:3001/api/v1/admin/users', {
+      headers: {
+        'Authorization': `Bearer ${keycloak.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const users = await response.json();
+    return users;
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    throw error;
+  }
+};
+```
+
+**Получение информации о пользователе с его ролями:**
+```js
+const getUserDetails = async (userId) => {
+  try {
+    await keycloak.updateToken(30);
+    
+    // Параллельно получаем информацию о пользователе и его роли
+    const [userResponse, rolesResponse] = await Promise.all([
+      fetch(`http://localhost:3001/api/v1/admin/users/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${keycloak.token}`,
+          'Content-Type': 'application/json'
+        }
+      }),
+      fetch(`http://localhost:3001/api/v1/admin/users/${userId}/roles`, {
+        headers: {
+          'Authorization': `Bearer ${keycloak.token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    ]);
+    
+    if (!userResponse.ok || !rolesResponse.ok) {
+      throw new Error('Failed to fetch user details');
+    }
+    
+    const user = await userResponse.json();
+    const roles = await rolesResponse.json();
+    
+    return { ...user, roles };
+  } catch (error) {
+    console.error('Failed to fetch user details:', error);
+    throw error;
+  }
+};
+```
+
+**Управление сессиями пользователя:**
+```js
+const getUserSessions = async (userId) => {
+  try {
+    await keycloak.updateToken(30);
+    const response = await fetch(`http://localhost:3001/api/v1/admin/users/${userId}/sessions`, {
+      headers: {
+        'Authorization': `Bearer ${keycloak.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const sessions = await response.json();
+    return sessions;
+  } catch (error) {
+    console.error('Failed to fetch user sessions:', error);
+    throw error;
+  }
+};
+
+// Закрытие конкретной сессии
+const revokeSpecificSession = async (userId, sessionId) => {
+  try {
+    await keycloak.updateToken(30);
+    const response = await fetch(`http://localhost:3001/api/v1/admin/users/${userId}/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${keycloak.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Failed to revoke session:', error);
+    throw error;
+  }
+};
+
+// Закрытие всех сессий пользователя
+const revokeAllUserSessions = async (userId) => {
+  try {
+    await keycloak.updateToken(30);
+    const response = await fetch(`http://localhost:3001/api/v1/admin/users/${userId}/sessions/revoke`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${keycloak.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Failed to revoke all sessions:', error);
+    throw error;
+  }
+};
+```
+
+**Компонент управления сессиями для React:**
+```jsx
+import React, { useState, useEffect } from 'react';
+
+const UserSessionsManager = ({ userId }) => {
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadUserSessions();
+  }, [userId]);
+
+  const loadUserSessions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const userSessions = await getUserSessions(userId);
+      setSessions(userSessions);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId) => {
+    try {
+      await revokeSpecificSession(userId, sessionId);
+      // Обновляем список сессий после закрытия
+      await loadUserSessions();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    try {
+      await revokeAllUserSessions(userId);
+      // Обновляем список сессий
+      await loadUserSessions();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  if (loading) return <div>Загрузка сессий...</div>;
+  if (error) return <div>Ошибка: {error}</div>;
+
+  return (
+    <div className="sessions-manager">
+      <div className="sessions-header">
+        <h3>Активные сессии ({sessions.length})</h3>
+        <button 
+          onClick={handleRevokeAllSessions}
+          className="btn btn-danger"
+          disabled={sessions.length === 0}
+        >
+          Закрыть все сессии
+        </button>
+      </div>
+      
+      {sessions.length === 0 ? (
+        <p>Нет активных сессий</p>
+      ) : (
+        <div className="sessions-list">
+          {sessions.map((session) => (
+            <div key={session.id} className="session-card">
+              <div className="session-info">
+                <p><strong>ID:</strong> {session.id}</p>
+                <p><strong>IP:</strong> {session.ipAddress}</p>
+                <p><strong>Клиент:</strong> {session.clientId}</p>
+                <p><strong>Начало:</strong> {new Date(session.start).toLocaleString()}</p>
+              </div>
+              <button
+                onClick={() => handleRevokeSession(session.id)}
+                className="btn btn-outline-danger btn-sm"
+              >
+                Закрыть
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default UserSessionsManager;
 ```
 
 ## 4) Обновление токена
@@ -401,6 +659,55 @@ export interface UpdateUserRequest {
   last_name?: string;
   roles?: string[];
 }
+
+// Новые типы для управления пользователями и сессиями
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  enabled: boolean;
+  emailVerified: boolean;
+  createdTimestamp: number;
+  attributes?: Record<string, string[]>;
+}
+
+export interface UserSession {
+  id: string;
+  userId: string;
+  username: string;
+  ipAddress: string;
+  start: number;
+  lastAccess: number;
+  clients: Record<string, string>;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  composite: boolean;
+  clientRole: boolean;
+  containerId: string;
+}
+
+export interface SessionRevocationResponse {
+  success: boolean;
+  message: string;
+  sessionsRevoked?: number;
+}
+
+export interface UsersListResponse {
+  users: User[];
+  totalCount: number;
+}
+
+export interface UserDetailsResponse {
+  user: User;
+  roles: Role[];
+  sessions: UserSession[];
+}
 ```
 
 Пример использования с TypeScript:
@@ -433,6 +740,112 @@ export class StatisticsService {
     }
     
     return data.data;
+  }
+}
+
+// services/userManagement.ts
+import { 
+  User, 
+  UserSession, 
+  Role, 
+  SessionRevocationResponse,
+  CreateUserRequest,
+  UpdateUserRequest,
+  ApiResponse 
+} from '../types/api';
+
+export class UserManagementService {
+  private readonly baseUrl = 'http://localhost:3001/api/v1';
+
+  private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    await keycloak.updateToken(30);
+    
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${keycloak.token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // Получение всех пользователей
+  async getAllUsers(): Promise<User[]> {
+    return this.makeRequest<User[]>('/admin/users');
+  }
+
+  // Получение пользователя по ID
+  async getUserById(userId: string): Promise<User> {
+    return this.makeRequest<User>(`/admin/users/${userId}`);
+  }
+
+  // Получение ролей пользователя
+  async getUserRoles(userId: string): Promise<Role[]> {
+    return this.makeRequest<Role[]>(`/admin/users/${userId}/roles`);
+  }
+
+  // Получение сессий пользователя
+  async getUserSessions(userId: string): Promise<UserSession[]> {
+    return this.makeRequest<UserSession[]>(`/admin/users/${userId}/sessions`);
+  }
+
+  // Создание пользователя
+  async createUser(userData: CreateUserRequest): Promise<User> {
+    return this.makeRequest<User>('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(userData)
+    });
+  }
+
+  // Обновление пользователя
+  async updateUser(userId: string, userData: UpdateUserRequest): Promise<User> {
+    return this.makeRequest<User>(`/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData)
+    });
+  }
+
+  // Удаление пользователя
+  async deleteUser(userId: string): Promise<void> {
+    return this.makeRequest<void>(`/admin/users/${userId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Закрытие всех сессий пользователя
+  async revokeAllUserSessions(userId: string): Promise<SessionRevocationResponse> {
+    return this.makeRequest<SessionRevocationResponse>(`/admin/users/${userId}/sessions/revoke`, {
+      method: 'POST'
+    });
+  }
+
+  // Закрытие конкретной сессии
+  async revokeSpecificSession(userId: string, sessionId: string): Promise<SessionRevocationResponse> {
+    return this.makeRequest<SessionRevocationResponse>(`/admin/users/${userId}/sessions/${sessionId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Получение полной информации о пользователе (пользователь + роли + сессии)
+  async getUserFullDetails(userId: string): Promise<{
+    user: User;
+    roles: Role[];
+    sessions: UserSession[];
+  }> {
+    const [user, roles, sessions] = await Promise.all([
+      this.getUserById(userId),
+      this.getUserRoles(userId),
+      this.getUserSessions(userId)
+    ]);
+
+    return { user, roles, sessions };
   }
 }
 
@@ -470,8 +883,179 @@ export const useStatistics = (refreshInterval = 30000) => {
   
   return { statistics, loading, error, refetch: fetchStatistics };
 };
+
+// hooks/useUserManagement.ts (для React)
+import { useState, useEffect, useCallback } from 'react';
+import { User, UserSession, Role } from '../types/api';
+import { UserManagementService } from '../services/userManagement';
+
+const userManagementService = new UserManagementService();
+
+export const useUsers = () => {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await userManagementService.getAllUsers();
+      setUsers(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const deleteUser = async (userId: string) => {
+    try {
+      await userManagementService.deleteUser(userId);
+      await fetchUsers(); // Обновляем список
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  return { users, loading, error, refetch: fetchUsers, deleteUser };
+};
+
+export const useUserDetails = (userId: string) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchUserDetails = useCallback(async () => {
+    if (!userId) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await userManagementService.getUserFullDetails(userId);
+      setUser(data.user);
+      setRoles(data.roles);
+      setSessions(data.sessions);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    fetchUserDetails();
+  }, [fetchUserDetails]);
+
+  const revokeSession = async (sessionId: string) => {
+    try {
+      await userManagementService.revokeSpecificSession(userId, sessionId);
+      await fetchUserDetails(); // Обновляем данные
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const revokeAllSessions = async () => {
+    try {
+      await userManagementService.revokeAllUserSessions(userId);
+      await fetchUserDetails(); // Обновляем данные
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  return { 
+    user, 
+    roles, 
+    sessions, 
+    loading, 
+    error, 
+    refetch: fetchUserDetails,
+    revokeSession,
+    revokeAllSessions
+  };
+};
 ```
 
-## 7) CORS
+## 8) Обновленные рекомендации и лучшие практики
 
-Бэкенд уже включает CORS (allow origin: Any). Для продакшена задайте разрешённые домены.
+### Конфигурация токенов
+
+Основная проблема решена - Keycloak теперь выдает токены с правильным issuer URL (`http://localhost:8081`). Это означает, что фронтенд может полноценно работать с бэкендом.
+
+### Полный список доступных эндпоинтов:
+
+**Основные эндпоинты:**
+- `GET /health` - Проверка статуса сервиса
+- `POST /auth/validate` - Валидация токена
+- `GET /api/v1/statistics` - Статистика системы
+
+**Пользовательские эндпоинты:**
+- `GET /api/v1/user/profile` - Профиль пользователя
+- `GET /api/v1/user/roles` - Роли пользователя
+
+**Административные эндпоинты:**
+- `GET /api/v1/admin/users` - Получение всех пользователей
+- `GET /api/v1/admin/users/{id}` - Получение пользователя по ID
+- `GET /api/v1/admin/users/{id}/roles` - Получение ролей пользователя
+- `GET /api/v1/admin/users/{id}/sessions` - Получение сессий пользователя
+- `POST /api/v1/admin/users` - Создание пользователя
+- `PUT /api/v1/admin/users/{id}` - Обновление пользователя
+- `DELETE /api/v1/admin/users/{id}` - Удаление пользователя
+- `POST /api/v1/admin/users/{id}/sessions/revoke` - Закрытие всех сессий
+- `DELETE /api/v1/admin/users/{id}/sessions/{session_id}` - Закрытие отдельной сессии (НОВОЕ!)
+
+### Особенности работы с сессиями
+
+1. **Индивидуальное закрытие сессий** - теперь возможно закрывать конкретные сессии по ID
+2. **Отслеживание сессий** - можно получать подробную информацию о каждой сессии
+3. **Массовое управление** - возможность закрыть все сессии пользователя одной командой
+
+### Пример полного рабочего цикла
+
+```js
+// Полный пример работы с пользователями и сессиями
+const userManagement = {
+  // 1. Получаем всех пользователей
+  async loadUsers() {
+    const users = await userManagementService.getAllUsers();
+    return users;
+  },
+  
+  // 2. Получаем полную информацию о пользователе
+  async getUserDetails(userId) {
+    const details = await userManagementService.getUserFullDetails(userId);
+    return details; // { user, roles, sessions }
+  },
+  
+  // 3. Управляем сессиями
+  async manageUserSessions(userId) {
+    const sessions = await userManagementService.getUserSessions(userId);
+    
+    // Закрываем конкретную сессию
+    if (sessions.length > 0) {
+      await userManagementService.revokeSpecificSession(userId, sessions[0].id);
+    }
+    
+    // Или закрываем все сессии
+    await userManagementService.revokeAllUserSessions(userId);
+  }
+};
+```
+
+### Тестирование интеграции
+
+Для проверки работоспособности вашего фронтенда, выполните следующие шаги:
+
+1. **Проверка токенов:** Убедитесь, что issuer в токенах = `http://localhost:8081`
+2. **Тест API:** Проверьте все ключевые эндпоинты
+3. **Управление сессиями:** Проверьте закрытие сессий
+
+Все новые функции реализованы и готовы к использованию!
