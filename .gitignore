@@ -17,8 +17,7 @@
 **/.env
 **/.env.*
 
-# Docker
-**/.dockerignore
+
 
 # Logs
 *.log
