@@ -4,7 +4,7 @@ use axum::{
     response::Json,
 };
 use serde_json::json;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 
 use crate::{models::{CreateUserRequest, UpdateUserRequest}, AppState};
 
@@ -12,11 +12,15 @@ pub async fn create_user(
     State(state): State<AppState>,
     Json(payload): Json<CreateUserRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    info!("Admin: create user '{}': roles={:?}", payload.username, payload.roles);
+    let username = payload.username.clone();
+    info!("Admin: create user '{}': roles={:?}", username, payload.roles);
     match state.auth_service.create_keycloak_user(payload).await {
-        Ok(user_id) => Ok(Json(json!({ "id": user_id }))),
+        Ok(user_id) => {
+            info!("Successfully created user with id: {}", user_id);
+            Ok(Json(json!({ "id": user_id })))
+        },
         Err(e) => {
-            warn!("Create user failed: {}", e);
+            error!("Create user '{}' failed: {}", username, e);
             Err(StatusCode::BAD_REQUEST)
         }
     }
@@ -88,10 +92,13 @@ pub async fn get_all_users(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     info!("Admin: get all users");
     match state.auth_service.get_all_users().await {
-        Ok(users) => Ok(Json(json!({ "users": users }))),
+        Ok(users) => {
+            info!("Successfully retrieved {} users", users.len());
+            Ok(Json(json!({ "users": users })))
+        },
         Err(e) => {
-            warn!("Get all users failed: {}", e);
-            Err(StatusCode::BAD_REQUEST)
+            error!("Get all users failed: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }
@@ -116,10 +123,13 @@ pub async fn get_user_roles(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     info!("Admin: get roles for user '{}'", user_id);
     match state.auth_service.get_user_roles_by_id(&user_id).await {
-        Ok(roles) => Ok(Json(json!({ "roles": roles }))),
+        Ok(roles) => {
+            info!("Successfully retrieved {} roles for user {}", roles.len(), user_id);
+            Ok(Json(json!({ "roles": roles })))
+        },
         Err(e) => {
-            warn!("Get user roles failed: {}", e);
-            Err(StatusCode::BAD_REQUEST)
+            error!("Get user roles failed for user {}: {}", user_id, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }

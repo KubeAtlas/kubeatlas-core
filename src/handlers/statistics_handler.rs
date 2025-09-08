@@ -1,8 +1,9 @@
 use axum::{
-    extract::State,
+    extract::{Request, State},
     http::StatusCode,
     response::Json,
 };
+use tracing::{info, warn, error};
 
 use crate::{
     models::{ApiResponse, StatisticsResponse, StatItem, SystemStatus, ServiceStatus},
@@ -18,11 +19,22 @@ use crate::{
 /// - System status with service health details
 pub async fn get_statistics(
     State(state): State<AppState>,
+    request: Request,
 ) -> Result<Json<ApiResponse<StatisticsResponse>>, StatusCode> {
+    // Extract user from request extensions (set by auth middleware)
+    let user = request
+        .extensions()
+        .get::<crate::auth::KeycloakUser>()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    info!("Getting statistics for user: {}", user.preferred_username);
     match get_statistics_data(&state).await {
-        Ok(stats) => Ok(Json(ApiResponse::success(stats))),
+        Ok(stats) => {
+            info!("Successfully retrieved statistics for user: {}", user.preferred_username);
+            Ok(Json(ApiResponse::success(stats)))
+        },
         Err(e) => {
-            tracing::error!("Failed to get statistics: {}", e);
+            error!("Failed to get statistics for user {}: {}", user.preferred_username, e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

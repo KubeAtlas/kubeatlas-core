@@ -5,7 +5,7 @@ use axum::{
     response::{Json, Response},
 };
 use serde_json::json;
-use tracing::{info, warn};
+use tracing::{info, warn, error, debug};
 
 use crate::AppState;
 
@@ -17,9 +17,12 @@ pub async fn auth_middleware(
     // Extract token from Authorization header
     let headers = request.headers().clone();
     let token = match state.auth_service.extract_token_from_headers(&headers) {
-        Ok(token) => token,
+        Ok(token) => {
+            debug!("Successfully extracted token from headers");
+            token
+        },
         Err(e) => {
-            warn!("Failed to extract token: {}", e);
+            warn!("Failed to extract token from headers: {}", e);
             return Err((
                 StatusCode::UNAUTHORIZED,
                 Json(json!({
@@ -67,7 +70,7 @@ pub async fn auth_middleware(
             }
         }
         Err(e) => {
-            warn!("Token validation error: {}", e);
+            error!("Token validation error: {}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({

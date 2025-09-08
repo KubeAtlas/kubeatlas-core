@@ -748,7 +748,8 @@ struct CredentialRepresentation<'a> {
 
 impl AuthService {
     pub async fn get_admin_access_token(&self) -> Result<String> {
-        let params = [
+        // Try client_credentials first (for service accounts)
+        let client_credentials_params = [
             ("grant_type", "client_credentials"),
             ("client_id", self.config.keycloak_client_id.as_str()),
             ("client_secret", self.config.keycloak_client_secret.as_str()),
@@ -757,16 +758,40 @@ impl AuthService {
         let resp = self
             .client
             .post(&self.config.keycloak_token_url())
-            .form(&params)
+            .form(&client_credentials_params)
             .send()
             .await?;
 
-        if !resp.status().is_success() {
-            return Err(anyhow!("Failed to get admin token: HTTP {}", resp.status()));
+        if resp.status().is_success() {
+            let token: OAuthTokenResponse = resp.json().await?;
+            return Ok(token.access_token);
         }
 
-        let token: OAuthTokenResponse = resp.json().await?;
-        Ok(token.access_token)
+        // Fallback to admin-service user password flow
+        if let (Some(username), Some(password)) = (&self.config.adm_user, &self.config.adm_password) {
+            let password_params = [
+                ("grant_type", "password"),
+                ("client_id", self.config.keycloak_client_id.as_str()),
+                ("client_secret", self.config.keycloak_client_secret.as_str()),
+                ("username", username.as_str()),
+                ("password", password.as_str()),
+                ("scope", "openid profile email roles"),
+            ];
+
+            let resp = self
+                .client
+                .post(&self.config.keycloak_token_url())
+                .form(&password_params)
+                .send()
+                .await?;
+
+            if resp.status().is_success() {
+                let token: OAuthTokenResponse = resp.json().await?;
+                return Ok(token.access_token);
+            }
+        }
+
+        Err(anyhow!("Failed to get admin access token with both client_credentials and password flows"))
     }
 
     pub async fn create_keycloak_user(&self, req: CreateUserRequest) -> Result<String> {
