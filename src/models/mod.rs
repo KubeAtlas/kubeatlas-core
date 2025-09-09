@@ -4,6 +4,8 @@
 pub mod user;
 pub mod cluster;
 pub mod response;
+pub mod controller;
 
 pub use user::*;
 pub use response::*;
+pub use controller::*;

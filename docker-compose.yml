@@ -11,6 +11,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/initdb:/docker-entrypoint-initdb.d
 
+  redis:
+    image: redis:7-alpine
+    container_name: kubeatlas-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: kubeatlas-keycloak
@@ -44,11 +52,10 @@ services:
     container_name: kubeatlas-backend
     depends_on:
       - keycloak
-      - postgres
+      - redis
     environment:
       RUST_LOG: info
       SERVER_ADDRESS: 0.0.0.0:3001
-      DATABASE_URL: postgresql://keycloak:keycloak123@postgres:5432/kubeatlas
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: kubeatlas
       KEYCLOAK_CLIENT_ID: kubeatlas-backend
@@ -57,6 +64,7 @@ services:
       ADM_PASSWORD: AdminPassw0rd!
       KEYCLOAK_ADMIN_USER: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      REDIS_URL: redis://redis:6379
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -64,5 +72,6 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 

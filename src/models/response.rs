@@ -66,3 +66,9 @@ impl<T> ApiResponse<T> {
         }
     }
 }
+
+#[derive(Debug, Serialize)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: Option<String>,
+}

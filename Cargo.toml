@@ -39,6 +39,13 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 rand = "0.8"
+sha2 = "0.10"
+
+# Redis for install tokens
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+
+# Certificate parsing
+x509-parser = "0.16"
 
 # HTTP client for Keycloak (already defined above)
 

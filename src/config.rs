@@ -1,3 +1,4 @@
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -6,7 +7,6 @@ use rand::{distributions::Alphanumeric, Rng};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub server_address: String,
-    pub database_url: String,
     pub keycloak_url: String,
     pub keycloak_realm: String,
     pub keycloak_client_id: String,
@@ -17,6 +17,7 @@ pub struct Config {
     pub adm_password: Option<String>,
     pub keycloak_admin_user: Option<String>,
     pub keycloak_admin_password: Option<String>,
+    pub redis_url: String,
 }
 
 impl Config {
@@ -29,8 +30,6 @@ impl Config {
         let config = Config {
             server_address: env::var("SERVER_ADDRESS")
                 .unwrap_or_else(|_| "0.0.0.0:3001".to_string()),
-            database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgresql://keycloak:keycloak123@localhost:5432/kubeatlas".to_string()),
             keycloak_url: env::var("KEYCLOAK_URL")
                 .unwrap_or_else(|_| "http://localhost:8080".to_string()),
             keycloak_realm: env::var("KEYCLOAK_REALM")
@@ -53,6 +52,8 @@ impl Config {
             adm_password: env::var("ADM_PASSWORD").ok(),
             keycloak_admin_user: env::var("KEYCLOAK_ADMIN_USER").ok(),
             keycloak_admin_password: env::var("KEYCLOAK_ADMIN_PASSWORD").ok(),
+            redis_url: env::var("REDIS_URL")
+                .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
         };
 
         Ok(config)

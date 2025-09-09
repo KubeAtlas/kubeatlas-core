@@ -18,16 +18,19 @@ mod config;
 mod handlers;
 mod middleware;
 mod models;
+mod services;
 
 use auth::AuthService;
 use config::Config;
-use handlers::{auth_handler, health_handler, user_handler, user_admin_handler, statistics_handler};
+use handlers::{auth_handler, health_handler, user_handler, user_admin_handler, statistics_handler, install_handler};
+use services::{TokenService, InstallService};
 use crate::middleware::{auth_middleware, require_admin_middleware};
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
     pub auth_service: AuthService,
+    pub install_service: InstallService,
 }
 
 #[tokio::main]
@@ -86,10 +89,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("⚠️ Failed to ensure realm admin role: {}", e);
     }
 
+    // Initialize token service
+    let token_service = match TokenService::new(&config.redis_url) {
+        Ok(service) => {
+            info!("✅ Token service initialized");
+            service
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to initialize token service: {}", e);
+            return Err(e.into());
+        }
+    };
+
+    // Initialize install service (Redis-only, no database)
+    let install_service = InstallService::new(token_service);
+
     // Create app state
     let app_state = AppState {
         config: config.clone(),
         auth_service,
+        install_service,
     };
 
     // Protected user routes
@@ -97,6 +116,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/user/profile", get(user_handler::get_profile))
         .route("/api/v1/user/roles", get(user_handler::get_user_roles))
         .route("/api/v1/statistics", get(statistics_handler::get_statistics))
+        .route("/api/v1/install-tokens", post(install_handler::create_install_token))
+        .route("/api/v1/services", get(install_handler::list_connected_services))
         .layer(from_fn_with_state(app_state.clone(), auth_middleware));
 
     // Admin routes (RBAC only for this subrouter)
@@ -124,6 +145,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/user", get(auth_handler::get_user_info))
         .route("/auth/refresh", post(auth_handler::refresh_token))
         .route("/auth/logout", post(auth_handler::logout))
+        
+        // Service registration (no auth required - uses install token)
+        .route("/api/v1/register", post(install_handler::register_service))
         
         // Merge subrouters
         .merge(protected)
